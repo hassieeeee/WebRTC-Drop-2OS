@@ -21,7 +21,7 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" android:maxSdkVersion="28" />
 
     <application
-        android:label="cross_os_ble_demo"
+        android:label="webrtc_drop_2os"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

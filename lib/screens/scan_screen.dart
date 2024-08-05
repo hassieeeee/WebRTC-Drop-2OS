@@ -4,12 +4,14 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/foundation.dart';
 import '../utils/peripheral.dart';
-import 'device_screen.dart';
+// import 'device_screen.dart';
 import 'chat_screen.dart';
 import '../utils/snackbar.dart';
 import '../widgets/system_device_tile.dart';
 import '../widgets/scan_result_tile.dart';
 import '../utils/extra.dart';
+
+import 'textscreen.dart';
 
 class ScanScreen extends StatefulWidget {
   const ScanScreen({Key? key}) : super(key: key);
@@ -27,6 +29,12 @@ class _ScanScreenState extends State<ScanScreen> {
 
   late Peripheral peripheral;
   PermissionStatus _permissionStatus = PermissionStatus.denied;
+
+  String serviceKenkyuu = "db7e2243-3a33-4ebc-944b-1814e86a6299";
+  // String characteristicKenkyuuWrite = "6a4b3194-1a96-4af1-9630-bf39807743a1";
+  // String characteristicKenkyuuRead = "00002A18-0000-1000-8000-00805F9B34FB";
+
+  bool _datachanelState = true;
 
   @override
   void initState() {
@@ -90,7 +98,10 @@ class _ScanScreenState extends State<ScanScreen> {
       Snackbar.show(ABC.b, prettyException("System Devices Error:", e), success: false);
     }
     try {
-      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 15));
+      await FlutterBluePlus.startScan(
+          withServices: [Guid(serviceKenkyuu)],
+          timeout: const Duration(seconds: 15)
+      );
     } catch (e) {
       Snackbar.show(ABC.b, prettyException("Start Scan Error:", e), success: false);
     }
@@ -156,29 +167,24 @@ class _ScanScreenState extends State<ScanScreen> {
     }
   }
 
-  List<Widget> _buildSystemDeviceTiles(BuildContext context) {
-    return _systemDevices
-        .map(
-          (d) => SystemDeviceTile(
-        device: d,
-        onOpen: () => Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => DeviceScreen(device: d),
-            settings: RouteSettings(name: '/DeviceScreen'),
-          ),
-        ),
-        onConnect: () => onConnectPressed(d),
-      ),
-    )
-        .toList();
-  }
+  // List<Widget> _buildSystemDeviceTiles(BuildContext context) {
+  //   return _systemDevices
+  //       .map(
+  //         (d) => SystemDeviceTile(
+  //       device: d,
+  //       onOpen: () => Navigator.of(context).push(
+  //         MaterialPageRoute(
+  //           builder: (context) => DeviceScreen(device: d),
+  //           settings: RouteSettings(name: '/DeviceScreen'),
+  //         ),
+  //       ),
+  //       onConnect: () => onConnectPressed(d),
+  //     ),
+  //   )
+  //       .toList();
+  // }
 
   List<Widget> _buildScanResultTiles(BuildContext context) {
-
-    String serviceKenkyuu = "db7e2243-3a33-4ebc-944b-1814e86a6299";
-    // String characteristicKenkyuuWrite = "6a4b3194-1a96-4af1-9630-bf39807743a1";
-    // String characteristicKenkyuuRead = "00002A18-0000-1000-8000-00805F9B34FB";
-
 
     return _scanResults.where((element) {
       print(element);
@@ -195,24 +201,24 @@ class _ScanScreenState extends State<ScanScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return ScaffoldMessenger(
-      key: Snackbar.snackBarKeyB,
+    return _datachanelState
+        ? const TextScreen()
+        : ScaffoldMessenger(
+      // key: Snackbar.snackBarKeyB,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Find Devices'),
         ),
         body: RefreshIndicator(
-          onRefresh: onRefresh,
-          child: ListView(
-            children: <Widget>[
-              ..._buildSystemDeviceTiles(context),
-              ..._buildScanResultTiles(context),
-              ElevatedButton(onPressed: _update, child: const Text('update')),
-              ElevatedButton(onPressed: _getService, child: const Text('service')),
-              ElevatedButton(onPressed: _add, child: const Text('add')),
-            ],
+            onRefresh: onRefresh,
+            child: ListView(
+              children: <Widget>[
+                // ..._buildSystemDeviceTiles(context),
+                ..._buildScanResultTiles(context),
+                // ElevatedButton(onPressed: _update, child: const Text('update')),
+              ],
+            ),
           ),
-        ),
         floatingActionButton: buildScanButton(context),
       ),
     );
