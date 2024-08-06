@@ -7,7 +7,16 @@ import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 class Central {
   final BluetoothDevice device;
-  Central({required this.device});
+  final Function(dynamic) onreadMessage;//readした値のコールバック用
+  final Function(int) getMtu;
+  final Function() createIdOffer;
+
+  Central({
+    required this.device,
+    required this.onreadMessage,
+    required this.getMtu,
+    required this.createIdOffer,
+  });
 
   int? _rssi;
   int? _mtuSize;
@@ -29,13 +38,14 @@ class Central {
 
   late StreamSubscription<List<int>> _lastValueSubscription;
 
+
+
   String serviceKenkyuuUuid = "db7e2243-3a33-4ebc-944b-1814e86a6299";
   String characteristicKenkyuuWriteUuid = "6a4b3194-1a96-4af1-9630-bf39807743a1";
   String characteristicKenkyuuReadUuid = "00002A18-0000-1000-8000-00805F9B34FB";
 
 
-
-  void init() {
+  Future<void> init() async{
 
     _connectionStateSubscription = device.connectionState.listen((state) async {
       _connectionState = state;
@@ -49,7 +59,7 @@ class Central {
 
     _mtuSubscription = device.mtu.listen((value) {
       _mtuSize = value;
-
+      getMtu(value);
     });
 
     _isConnectingSubscription = device.isConnecting.listen((value) {
@@ -67,10 +77,12 @@ class Central {
       await onSubscribePressed();
 
       _lastValueSubscription = _kenkyuuCharactaristicRead.lastValueStream.listen((value) {
-        readReceivedValue = value;
-        // print("valueeeeeeeeeee");
-        print(utf8.decode(value));
+        if(value.isNotEmpty){
+          onreadMessage(utf8.decode(value));//signaling.dartへのcallback
+        }
+
       });
+      await createIdOffer();//signaling.dartでシグナリングを開始する
     });
 
   }
@@ -127,6 +139,7 @@ class Central {
     _kenkyuuCharacteristicWrite = _kenkyuuService.characteristics.firstWhere((element) => element.uuid == Guid(characteristicKenkyuuWriteUuid));
 
     isDiscoveringServices = false;
+
   }
 
   Future onRequestMtuPressed() async {
@@ -165,6 +178,7 @@ class Central {
   Future onWrite(String text) async{
     try {
       await _kenkyuuCharacteristicWrite.write(utf8.encode(text), withoutResponse: _kenkyuuCharacteristicWrite.properties.writeWithoutResponse);
+      print("write!$text");
       // if (c.properties.read) {
       //   await c.read();
       // }

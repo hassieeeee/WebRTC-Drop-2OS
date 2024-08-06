@@ -2,16 +2,18 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:flutter/foundation.dart';
-import '../utils/peripheral.dart';
-// import 'device_screen.dart';
-import 'chat_screen.dart';
-import '../utils/snackbar.dart';
-import '../widgets/system_device_tile.dart';
-import '../widgets/scan_result_tile.dart';
-import '../utils/extra.dart';
 
-import 'textscreen.dart';
+import 'share_screen.dart';
+import 'chat_screen.dart';
+
+// import '../utils/peripheral.dart';
+import '../utils/snackbar.dart';
+import '../utils/extra.dart';
+import '../utils/signaling.dart';
+
+import '../widgets/scan_result_tile.dart';
 
 class ScanScreen extends StatefulWidget {
   const ScanScreen({Key? key}) : super(key: key);
@@ -27,14 +29,14 @@ class _ScanScreenState extends State<ScanScreen> {
   late StreamSubscription<List<ScanResult>> _scanResultsSubscription;
   late StreamSubscription<bool> _isScanningSubscription;
 
-  late Peripheral peripheral;
+  late Signaling signaling;
   PermissionStatus _permissionStatus = PermissionStatus.denied;
 
   String serviceKenkyuu = "db7e2243-3a33-4ebc-944b-1814e86a6299";
   // String characteristicKenkyuuWrite = "6a4b3194-1a96-4af1-9630-bf39807743a1";
   // String characteristicKenkyuuRead = "00002A18-0000-1000-8000-00805F9B34FB";
 
-  bool _datachanelState = true;
+  bool _datachanelState = false;
 
   @override
   void initState() {
@@ -62,8 +64,8 @@ class _ScanScreenState extends State<ScanScreen> {
         await requestPermission(Permission.bluetoothConnect);
         await requestPermission(Permission.bluetoothScan);
       }
-      peripheral = Peripheral();
-      await peripheral.init();
+      signaling = Signaling();
+      await signaling.init();//peripheral.init()が行われる
     });
 
   }
@@ -73,22 +75,6 @@ class _ScanScreenState extends State<ScanScreen> {
     _scanResultsSubscription.cancel();
     _isScanningSubscription.cancel();
     super.dispose();
-  }
-
-  void _update() {
-    peripheral.updateCharacteristic();
-    // BlePeripheral.updateCharacteristic(
-    //   characteristicId: "b42224d1-48be-4ebf-9942-e236d3606b31",
-    //   value: utf8.encode("Data Changed"),
-    // );
-  }
-
-  void _getService(){
-    peripheral.getAllServices();
-  }
-
-  void _add(){
-    peripheral.addServices();
   }
 
   Future onScanPressed() async {
@@ -129,11 +115,13 @@ class _ScanScreenState extends State<ScanScreen> {
 
   void onConnectPressed(BluetoothDevice device) {
     device.connectAndUpdateStream().catchError((e) {
-      Snackbar.show(ABC.c, prettyException("Connect Error:", e), success: false);
+      // Snackbar.show(ABC.c, prettyException("Connect Error:", e), success: false);
     });
-    MaterialPageRoute route = MaterialPageRoute(
-        builder: (context) => ChatScreen(device: device), settings: RouteSettings(name: '/ChatScreen'));
-    Navigator.of(context).push(route);
+    // MaterialPageRoute route = MaterialPageRoute(
+    //     builder: (context) => ChatScreen(device: device), settings: RouteSettings(name: '/ChatScreen'));
+    // Navigator.of(context).push(route);
+
+    signaling.setCentral(device);
   }
 
   Future onRefresh() {
@@ -158,12 +146,15 @@ class _ScanScreenState extends State<ScanScreen> {
   Widget buildScanButton(BuildContext context) {
     if (FlutterBluePlus.isScanningNow) {
       return FloatingActionButton(
-        child: const Icon(Icons.stop),
         onPressed: onStopPressed,
         backgroundColor: Colors.red,
+        child: const Icon(Icons.stop),
       );
     } else {
-      return FloatingActionButton(child: const Text("SCAN"), onPressed: onScanPressed);
+      return FloatingActionButton(
+          onPressed: onScanPressed,
+        child: const Text("SCAN")
+      );
     }
   }
 
@@ -202,7 +193,7 @@ class _ScanScreenState extends State<ScanScreen> {
   @override
   Widget build(BuildContext context) {
     return _datachanelState
-        ? const TextScreen()
+        ? ShareScreen()
         : ScaffoldMessenger(
       // key: Snackbar.snackBarKeyB,
       child: Scaffold(

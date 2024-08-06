@@ -5,9 +5,16 @@ import 'package:ble_peripheral/ble_peripheral.dart';
 import 'package:flutter/foundation.dart';
 
 class Peripheral{
+  Peripheral({
+    required this.getMtu,
+    required this.receivedMessage,
+  });
+
   bool isAdvertising = false;
   bool isBleOn = false;
   List<String> devices = <String>[];
+  final Function(int) getMtu;
+  final Function(dynamic) receivedMessage;
 
   String get deviceName => switch (defaultTargetPlatform) {
     TargetPlatform.android => "BleDroid",
@@ -44,6 +51,8 @@ class Peripheral{
   String characteristicKenkyuuWrite = "6a4b3194-1a96-4af1-9630-bf39807743a1";
   String characteristicKenkyuuRead = "00002A18-0000-1000-8000-00805F9B34FB";
 
+
+
   Future<void> init() async{
 
     // setup callbacks
@@ -54,6 +63,10 @@ class Peripheral{
           isAdvertising = advertising;
           print("AdvertingStarted: $advertising, Error: $error");
         });
+
+    BlePeripheral.setMtuChangeCallback((deviceId, mtu) {
+      getMtu(mtu);
+    });
 
     BlePeripheral.setCharacteristicSubscriptionChangeCallback(
             (String deviceId, String characteristicId, bool isSubscribed) {
@@ -82,6 +95,7 @@ class Peripheral{
     BlePeripheral.setWriteRequestCallback(
             (deviceId, characteristicId, offset, value) {
           print("WriteRequest: $deviceId $characteristicId : $offset : $value");
+          receivedMessage(utf8.decode(value!));  //writeされた値をsignaling.dartにcallback
           return WriteRequestResult(value: value);
           //return null;
         });
@@ -94,7 +108,7 @@ class Peripheral{
     // super.onInit();
     Future(() async{
       _initialize();
-      await Future.delayed(const Duration(milliseconds: 1000));
+      await Future.delayed(const Duration(milliseconds: 1000));//これがないと次のaddServices()ができない。awaitでもダメだった。
       await addServices();
       startAdvertising();
     });
@@ -203,11 +217,11 @@ class Peripheral{
   }
 
   /// Update characteristic value, to all the devices which are subscribed to it
-  void updateCharacteristic() async {
+  Future<void> updateCharacteristic(String text) async {
     try {
       await BlePeripheral.updateCharacteristic(
         characteristicId: characteristicKenkyuuRead,
-        value: utf8.encode("Data Changed"),
+        value: utf8.encode(text),
         // deviceId: devices[0],
       );
     } catch (e) {

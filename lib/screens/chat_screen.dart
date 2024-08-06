@@ -1,7 +1,7 @@
 // import 'dart:async';
 // import 'dart:convert';
 
-import 'package:cross_os_ble_demo/utils/central.dart';
+import '../utils/central.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
@@ -21,7 +21,7 @@ class _DeviceScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
-    central = Central(device: widget.device);
+    // central = Central(device: widget.device);
     central.init();
   }
 
