@@ -1,3 +1,3 @@
-# cross_os_ble_demo
+# webrtc-drop-2os
 
 OSをまたいだファイル共有アプリをつくる
