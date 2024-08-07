@@ -177,7 +177,8 @@ class Central {
 
   Future onWrite(String text) async{
     try {
-      await _kenkyuuCharacteristicWrite.write(utf8.encode(text), withoutResponse: _kenkyuuCharacteristicWrite.properties.writeWithoutResponse);
+      // await _kenkyuuCharacteristicWrite.write(utf8.encode(text), withoutResponse: _kenkyuuCharacteristicWrite.properties.writeWithoutResponse);
+      await _kenkyuuCharacteristicWrite.write(utf8.encode(text), withoutResponse: false);
       print("write!$text");
       // if (c.properties.read) {
       //   await c.read();

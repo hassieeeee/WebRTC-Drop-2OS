@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:async';
 import 'dart:developer';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:flutter/services.dart';
@@ -92,9 +93,11 @@ class Signaling {
 
   JsonEncoder _encoder = JsonEncoder();
   JsonDecoder _decoder = JsonDecoder();
-  // String _selfId = randomNumeric(6);
-  String _selfId = "666666";
+  late String _selfId;
   late String _peerId;
+  late String _remotePeerName;
+
+  String fulltext = "";
   var _turnCredential;
   Map<String, Session> _sessions = {};
   MediaStream? _localStream;
@@ -150,7 +153,17 @@ class Signaling {
     'optional': [],
   };
 
+  void randomNumeric(int n){
+    String randomName = '';
+    var random = math.Random();
+    for(int i=0;i<n;i++){
+      randomName = randomName + random.nextInt(10).toString();
+    }
+    _selfId = randomName;
+  }
+
   Future<void> init()async {
+    randomNumeric(6);
     peripheral = Peripheral(
         getMtu: getMtu,
         receivedMessage: onMessage,
@@ -175,12 +188,12 @@ class Signaling {
   // }
 
   void getMtu(int mtu){
-    bleMtuSize = mtu-3;
+    bleMtuSize = mtu-17;
     print("mtuSize:{$bleMtuSize}");
   }
 
   Future<void> writeMessage(String content) async {
-    content = '${content}fin';
+    content = '$content*';
     int length = content.length;
     log('$length');
     int listNow = 0;
@@ -256,7 +269,13 @@ class Signaling {
   }
 
   void onMessage(messageJson) async {
-    String text = messageJson.substring(0,messageJson.length-3);
+    fulltext = fulltext + messageJson;
+    print('fulltext: $fulltext');
+    if(messageJson[messageJson.length-1]!='*'){
+      return;
+    }
+    String text = fulltext.substring(0,fulltext.length-1);
+    fulltext = '';
     print(text);
     Map<String, dynamic> mapData = _decoder.convert(text);
     var data = mapData['data'];
@@ -273,6 +292,14 @@ class Signaling {
       //     }
       //   }
       //   break;
+      case 'IdOffer':
+        _remotePeerName = mapData['data']['myName'];
+        _peerId = mapData['data']['Id'];
+        createIdAnswer();
+      case 'IdAnswer':
+        _remotePeerName = mapData['data']['myName'];
+        _peerId = mapData['data']['Id'];
+        invite(_peerId, "data", false);
       case 'offer':
         {
           var peerId = data['from'];
@@ -590,9 +617,9 @@ class Signaling {
     });
   }
 
-  void createIdAnswer(String myName,) {
+  void createIdAnswer() {
     _send('IdAnswer', {
-      'myName': myName,
+      'myName': DeviceInfo.label,
       'Id': _selfId,
     });
   }
