@@ -6,7 +6,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:flutter/foundation.dart';
 
 import 'share_screen.dart';
-import 'chat_screen.dart';
+import 'load_screen.dart';
 
 // import '../utils/peripheral.dart';
 import '../utils/snackbar.dart';
@@ -33,10 +33,15 @@ class _ScanScreenState extends State<ScanScreen> {
   PermissionStatus _permissionStatus = PermissionStatus.denied;
 
   String serviceKenkyuu = "db7e2243-3a33-4ebc-944b-1814e86a6299";
+
   // String characteristicKenkyuuWrite = "6a4b3194-1a96-4af1-9630-bf39807743a1";
   // String characteristicKenkyuuRead = "00002A18-0000-1000-8000-00805F9B34FB";
 
-  bool _datachanelState = false;
+  bool _dcConnecting = false;
+  bool _inCalling = false;
+  RTCDataChannel? _dataChannel;
+  Session? _session;
+  Timer? _timer;
 
   @override
   void initState() {
@@ -59,15 +64,54 @@ class _ScanScreenState extends State<ScanScreen> {
     });
     Future(() async {
       await requestPermission(Permission.bluetooth);
-      if (defaultTargetPlatform == TargetPlatform.android){
+      if (defaultTargetPlatform == TargetPlatform.android) {
         await requestPermission(Permission.bluetoothAdvertise);
         await requestPermission(Permission.bluetoothConnect);
         await requestPermission(Permission.bluetoothScan);
       }
       signaling = Signaling();
-      await signaling.init();//peripheral.init()が行われる
-    });
+      await signaling.init(); //peripheral.init()が行われる
+      signaling.onDataChannel = (_, channel) {
+        _dataChannel = channel;
+      };
 
+      signaling.onSignalingStateChange = (SignalingState state) {
+        switch (state) {
+          case SignalingState.ConnectionClosed:
+          case SignalingState.ConnectionError:
+          case SignalingState.ConnectionOpen:
+            break;
+        }
+      };
+
+      signaling.onCallStateChange = (Session session, CallState state) {
+        switch (state) {
+          case CallState.CallStateNew:
+            {
+              setState(() {
+                _session = session;
+                _inCalling = true;
+                _dcConnecting = false;
+              });
+              print('callState:new');
+            }
+            break;
+          case CallState.CallStateBye:
+            {
+              setState(() {
+                _inCalling = false;
+              });
+              _timer?.cancel();
+              _dataChannel = null;
+              _session = null;
+              break;
+            }
+          case CallState.CallStateInvite:
+          case CallState.CallStateConnected:
+          case CallState.CallStateRinging:
+        }
+      };
+    });
   }
 
   @override
@@ -81,15 +125,16 @@ class _ScanScreenState extends State<ScanScreen> {
     try {
       _systemDevices = await FlutterBluePlus.systemDevices;
     } catch (e) {
-      Snackbar.show(ABC.b, prettyException("System Devices Error:", e), success: false);
+      Snackbar.show(ABC.b, prettyException("System Devices Error:", e),
+          success: false);
     }
     try {
       await FlutterBluePlus.startScan(
           withServices: [Guid(serviceKenkyuu)],
-          timeout: const Duration(seconds: 15)
-      );
+          timeout: const Duration(seconds: 15));
     } catch (e) {
-      Snackbar.show(ABC.b, prettyException("Start Scan Error:", e), success: false);
+      Snackbar.show(ABC.b, prettyException("Start Scan Error:", e),
+          success: false);
     }
     if (mounted) {
       setState(() {});
@@ -100,7 +145,8 @@ class _ScanScreenState extends State<ScanScreen> {
     try {
       FlutterBluePlus.stopScan();
     } catch (e) {
-      Snackbar.show(ABC.b, prettyException("Stop Scan Error:", e), success: false);
+      Snackbar.show(ABC.b, prettyException("Stop Scan Error:", e),
+          success: false);
     }
   }
 
@@ -120,6 +166,9 @@ class _ScanScreenState extends State<ScanScreen> {
     // MaterialPageRoute route = MaterialPageRoute(
     //     builder: (context) => ChatScreen(device: device), settings: RouteSettings(name: '/ChatScreen'));
     // Navigator.of(context).push(route);
+    setState(() {
+      _dcConnecting = true;
+    });
 
     signaling.setCentral(device);
   }
@@ -152,9 +201,7 @@ class _ScanScreenState extends State<ScanScreen> {
       );
     } else {
       return FloatingActionButton(
-          onPressed: onScanPressed,
-        child: const Text("SCAN")
-      );
+          onPressed: onScanPressed, child: const Text("SCAN"));
     }
   }
 
@@ -176,42 +223,45 @@ class _ScanScreenState extends State<ScanScreen> {
   // }
 
   List<Widget> _buildScanResultTiles(BuildContext context) {
-
-    return _scanResults.where((element) {
-      print(element);
-      return element.advertisementData.serviceUuids.contains(Guid(serviceKenkyuu));
-    })
+    return _scanResults
+        .where((element) {
+          print(element);
+          return element.advertisementData.serviceUuids
+              .contains(Guid(serviceKenkyuu));
+        })
         .map(
           (r) => ScanResultTile(
-        result: r,
-        onTap: () => onConnectPressed(r.device),
-      ),
-    )
+            result: r,
+            onTap: () => onConnectPressed(r.device),
+          ),
+        )
         .toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    return _datachanelState
-        ? ShareScreen()
-        : ScaffoldMessenger(
-      // key: Snackbar.snackBarKeyB,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Find Devices'),
-        ),
-        body: RefreshIndicator(
-            onRefresh: onRefresh,
-            child: ListView(
-              children: <Widget>[
-                // ..._buildSystemDeviceTiles(context),
-                ..._buildScanResultTiles(context),
-                // ElevatedButton(onPressed: _update, child: const Text('update')),
-              ],
-            ),
-          ),
-        floatingActionButton: buildScanButton(context),
-      ),
-    );
+    return _dcConnecting
+        ? LoadScreen() //読み込み画面にする
+        : _inCalling
+            ? ShareScreen()
+            : ScaffoldMessenger(
+                // key: Snackbar.snackBarKeyB,
+                child: Scaffold(
+                  appBar: AppBar(
+                    title: const Text('Find Devices'),
+                  ),
+                  body: RefreshIndicator(
+                    onRefresh: onRefresh,
+                    child: ListView(
+                      children: <Widget>[
+                        // ..._buildSystemDeviceTiles(context),
+                        ..._buildScanResultTiles(context),
+                        // ElevatedButton(onPressed: _update, child: const Text('update')),
+                      ],
+                    ),
+                  ),
+                  floatingActionButton: buildScanButton(context),
+                ),
+              );
   }
 }
