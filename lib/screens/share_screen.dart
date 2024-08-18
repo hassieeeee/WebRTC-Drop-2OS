@@ -1,13 +1,28 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_picker_android/image_picker_android.dart';
 import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
 import 'package:carousel_slider/carousel_slider.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart';
+
+import '../utils/signaling.dart';
 
 class ShareScreen extends StatefulWidget {
-  const ShareScreen({super.key});
+  final Signaling signaling;
+  final RTCDataChannel? dataChannel;
+  final Session? session;
+  final Timer? timer;
+
+  const ShareScreen(
+      {super.key,
+      required this.signaling,
+      required this.dataChannel,
+      required this.session,
+      required this.timer});
 
   @override
   State<ShareScreen> createState() => _ShareScreenState();
@@ -18,6 +33,23 @@ class _ShareScreenState extends State<ShareScreen> {
   List<XFile> imageFiles = [];
   List<Image> viewImages = [];
   int carouselSliderNumber = 0;
+  late Signaling _signaling;
+  late RTCDataChannel? _dataChannel;
+  late Session? _session;
+  late Timer? _timer;
+
+  List<int> receivedList = [];
+  late Uint8List receivedList8;
+  List<XFile> receivedImageFiles = [];
+  List<Image> receivedViewImages = [];
+  int receivedImagesCount = 0;
+  int receivedImagesNow = 0;
+
+  late Uint8List currentSendByteData;
+  int sendImagesCount = 0;
+  int sendImagesNow = 0;
+  int sendListLength = 0;
+  int sendListNow = 0;
 
   @override
   void initState() {
@@ -27,6 +59,85 @@ class _ShareScreenState extends State<ShareScreen> {
     if (imagePickerImplementation is ImagePickerAndroid) {
       imagePickerImplementation.useAndroidPhotoPicker = true;
     }
+    _signaling = widget.signaling;
+    _dataChannel = widget.dataChannel;
+    _session = widget.session;
+    _timer = widget.timer;
+
+    _signaling.onDataChannel = (_, channel) {
+      _dataChannel = channel;
+    };
+
+    _signaling.onDataChannelMessage =
+        (_, dc, RTCDataChannelMessage data) async {
+      if (data.isBinary) {
+        //中身がデータならtrue,メッセージならfalseへ
+        if (data.binary.length == 1) {
+          receivedImagesCount = data.binary.toList()[0]; //受け取る画像の枚数を確認してセット
+          await _dataChannel?.send(RTCDataChannelMessage('next'));
+        } else {
+          receivedList =
+              receivedList + data.binary.toList(); //分割されたデータをリストにして結合
+          print("receive: ${data.binary.toList().sublist(0, 10)}");
+        }
+        await _dataChannel?.send(RTCDataChannelMessage('next')); //送信者に次の送信を要請する
+      } else if (data.text == 'finish') {
+        receivedList8 =
+            Uint8List.fromList(receivedList); //受け取った画像1枚分のリストをUint8listに変換
+        XFile tempXFile = XFile.fromData(receivedList8); //そのUint8listをXFileに変換
+        receivedImageFiles.add(tempXFile); //保存する時用にXFileのリストに追加
+        // receivedViewImages.add(Image.file(File(tempXFile.path))); //受信した画像のプレビュー用にImageのリストに追加
+        receivedViewImages.add(Image.memory(receivedList8));
+        receivedImagesNow++; //今何枚目の画像かをカウント
+
+        if (receivedImagesCount == receivedImagesNow) {
+          receivedImagesCount = 0;
+          receivedImagesNow = 0;
+          await _dataChannel
+              ?.send(RTCDataChannelMessage('ok')); //全部の画像を受け取ったらokを送る
+          bool answer = await showDialog(
+              context: context,
+              builder: (_) {
+                return AlertDialogSample(
+                    receivedViewImages); //受け取った画像をダイアログで表示して保存するか聞く
+              });
+          if (answer) {
+            // await _saveImage2(list8);
+          }
+          receivedViewImages.clear();
+          receivedImageFiles.clear();
+        } else {
+          await _dataChannel?.send(RTCDataChannelMessage('next'));
+        }
+        receivedList.clear();
+        // receivedList8.removeRange(0, receivedList8.length);
+      } else if (data.text == 'next') {
+        if (sendListNow == 0) {
+          currentSendByteData = await imageFiles[sendImagesNow].readAsBytes();
+          sendListLength = currentSendByteData.length;
+        }
+        if (sendListNow + 250000 < sendListLength) {
+          await _dataChannel?.send(RTCDataChannelMessage.fromBinary(
+              currentSendByteData.sublist(sendListNow, sendListNow + 250000)));
+          sendListNow += 250000;
+        } else if (sendListNow > sendListLength) {
+          await _dataChannel?.send(RTCDataChannelMessage('finish'));
+          sendListNow = 0;
+          sendImagesNow++;
+        } else {
+          await _dataChannel?.send(RTCDataChannelMessage.fromBinary(
+              currentSendByteData.sublist(sendListNow, sendListLength)));
+          sendListNow += 250000;
+        }
+      } else if (data.text == 'ok') {
+        sendImagesNow = 0;
+        await showDialog(
+            context: context,
+            builder: (_) {
+              return AlertDialogConfirm();
+            });
+      }
+    };
   }
 
   void _imageSelect() async {
@@ -38,9 +149,33 @@ class _ShareScreenState extends State<ShareScreen> {
         viewImages.add(Image.file(File(gazou.path)));
       });
     });
+    sendImagesCount = imageFiles.length;
   }
 
-  void _send(){}
+  void _sendImageCount() async {
+    await _dataChannel?.send(RTCDataChannelMessage.fromBinary(
+        Uint8List.fromList([sendImagesCount])));
+    print(Uint8List.fromList([sendImagesCount]));
+  }
+
+  // Future<void> _sendBinary() async {
+  //   Uint8List byte = await imageFiles[0].readAsBytes();
+  //   int length = byte.length;
+  //   int listnow = 0;
+  //   for (int i = 250000;
+  //   i < length;
+  //   listnow = listnow + 250000, i = i + 250000) {
+  //     print("send: ${byte.sublist(listnow,listnow+10)}");
+  //     await _dataChannel
+  //         ?.send(RTCDataChannelMessage.fromBinary(byte.sublist(listnow, i)));
+  //     await Future.delayed(Duration(milliseconds: 100)); //相手が受け取って処理する時間を与える
+  //   }
+  //   await _dataChannel
+  //       ?.send(RTCDataChannelMessage.fromBinary(byte.sublist(listnow, length)));
+  //   await Future.delayed(Duration(milliseconds: 100));
+  //   await _dataChannel?.send(RTCDataChannelMessage('finish'));
+  //   print("send: finish!");
+  // }
 
   @override
   Widget build(BuildContext context) {
@@ -99,7 +234,7 @@ class _ShareScreenState extends State<ShareScreen> {
                           //自動でスライドしてくれるか
                           viewportFraction: 0.7,
                           //各カードの表示される範囲の割合
-                          enableInfiniteScroll: true,
+                          enableInfiniteScroll: false,
                           //最後のカードから最初のカードへの遷移
                           enlargeCenterPage: true,
                           onPageChanged: (index, reason) {
@@ -113,8 +248,8 @@ class _ShareScreenState extends State<ShareScreen> {
                     ),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: viewImages!.map((url) {
-                        int index = viewImages!.indexOf(url);
+                      children: viewImages.map((url) {
+                        int index = viewImages.indexOf(url);
                         return Container(
                           width: 15,
                           height: 15,
@@ -164,53 +299,175 @@ class _ShareScreenState extends State<ShareScreen> {
               const SizedBox(
                 width: 30,
               ),
-              ElevatedButton(
-                  onPressed: viewImages.isEmpty
-                      ? null
-                      : () => _send(),
-                  style: ButtonStyle(
-                      backgroundColor:
-                          WidgetStateProperty.all(
-                              viewImages.isEmpty
-                              ? const Color(0xFFEEEEEE)
-                              : Colors.pink.shade100
-                          )
-                  ),
-                  child: SizedBox(
-                    height: 50,
-                    width: 100,
-                    child: Center(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.send,
-                            color: viewImages.isEmpty
-                                ? const Color(0xFF9E9E9E)
-                                : const Color(0xFFc62828),
+              viewImages.isEmpty
+                  ? ElevatedButton(
+                      onPressed: null,
+                      style: ButtonStyle(
+                          backgroundColor:
+                              WidgetStateProperty.all(const Color(0xFFEEEEEE))),
+                      child: const SizedBox(
+                        height: 50,
+                        width: 100,
+                        child: Center(
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.send, color: Color(0xFF9E9E9E)),
+                              SizedBox(
+                                width: 10,
+                              ),
+                              Text(
+                                "send",
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  color: Color(0xFF9E9E9E),
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(
-                            width: 10,
+                        ),
+                      ))
+                  : ElevatedButton(
+                      onPressed: _sendImageCount,
+                      style: ButtonStyle(
+                          backgroundColor:
+                              WidgetStateProperty.all(Colors.pink.shade100)),
+                      child: const SizedBox(
+                        height: 50,
+                        width: 100,
+                        child: Center(
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.send, color: Color(0xFFc62828)),
+                              SizedBox(
+                                width: 10,
+                              ),
+                              Text(
+                                "send",
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  color: Color(0xFFc62828),
+                                ),
+                              ),
+                            ],
                           ),
-                          Text(
-                            "send",
-                            style: TextStyle(
-                              fontSize: 20,
-                              color: viewImages.isEmpty
-                                  ? const Color(0xFF9E9E9E)
-                                  : const Color(0xFFc62828),
-                            ),
-                          ),
-
-
-                        ],
-                      ),
-                    ),
-                  )),
+                        ),
+                      ))
             ],
           )
         ],
       )),
+    );
+  }
+}
+
+class AlertDialogSample extends StatelessWidget {
+  // AlertDialogSample({Key? key, required Uint8List gazou}) : super(key: key);
+  late List<Image> receivedImages;
+
+  AlertDialogSample(this.receivedImages, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+      ),
+      title: Text('Image received!'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            height: 300,
+            width: 300,
+            child: CarouselSlider(
+              items: receivedImages,
+              options: CarouselOptions(
+
+                height: 200,
+                //高さ
+                initialPage: 0,
+                //最初に表示されるページ
+                autoPlay: false,
+                //自動でスライドしてくれるか
+                viewportFraction: 0.7,
+                //各カードの表示される範囲の割合
+                enableInfiniteScroll: false,
+                //最後のカードから最初のカードへの遷移
+                enlargeCenterPage: true,
+              ),
+            ),
+          ),
+          const SizedBox(
+            height: 20,
+          ),
+          const Text('Do you want to save?'),
+          const SizedBox(
+            height: 20,
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                height: 50,
+                width: 100,
+                child: TextButton(
+                    onPressed: () {
+                      Navigator.of(context).pop(false);
+                    },
+                    child: const Text(
+                      'ignore',
+                      style: TextStyle(
+                        fontSize: 20,
+                      ),
+                    )),
+              ),
+              SizedBox(
+                height: 50,
+                width: 100,
+                child: TextButton(
+                    onPressed: () {
+                      Navigator.of(context).pop(true);
+                    },
+                    child: const Text(
+                      'save',
+                      style: TextStyle(
+                        fontSize: 20,
+                      ),
+                    )),
+              ),
+            ],
+          )
+        ],
+      ),
+    );
+  }
+}
+
+class AlertDialogConfirm extends StatelessWidget {
+  const AlertDialogConfirm({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+      ),
+      title: Text('Your Image has been sent!'),
+      actions: [
+        TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+            },
+            child: Text(
+              'ok',
+              style: TextStyle(
+                fontSize: 15,
+              ),
+            )),
+      ],
     );
   }
 }

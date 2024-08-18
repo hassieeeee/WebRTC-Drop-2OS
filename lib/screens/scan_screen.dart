@@ -108,6 +108,7 @@ class _ScanScreenState extends State<ScanScreen> {
             }
           case CallState.CallStateInvite:
           case CallState.CallStateConnected:
+            print('bbbbb');
           case CallState.CallStateRinging:
         }
       };
@@ -243,7 +244,7 @@ class _ScanScreenState extends State<ScanScreen> {
     return _dcConnecting
         ? LoadScreen() //読み込み画面にする
         : _inCalling
-            ? ShareScreen()
+            ? ShareScreen(signaling: signaling, dataChannel: _dataChannel, session: _session, timer: _timer,)
             : ScaffoldMessenger(
                 // key: Snackbar.snackBarKeyB,
                 child: Scaffold(
