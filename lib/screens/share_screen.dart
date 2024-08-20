@@ -74,14 +74,16 @@ class _ShareScreenState extends State<ShareScreen> {
         //中身がデータならtrue,メッセージならfalseへ
         if (data.binary.length == 1) {
           receivedImagesCount = data.binary.toList()[0]; //受け取る画像の枚数を確認してセット
-          await _dataChannel?.send(RTCDataChannelMessage('next'));
+          // await _dataChannel?.send(RTCDataChannelMessage('next'));
         } else {
           receivedList =
               receivedList + data.binary.toList(); //分割されたデータをリストにして結合
           print("receive: ${data.binary.toList().sublist(0, 10)}");
         }
         await _dataChannel?.send(RTCDataChannelMessage('next')); //送信者に次の送信を要請する
+        print("send: next!");
       } else if (data.text == 'finish') {
+        print("receive: finish!");
         receivedList8 =
             Uint8List.fromList(receivedList); //受け取った画像1枚分のリストをUint8listに変換
         XFile tempXFile = XFile.fromData(receivedList8); //そのUint8listをXFileに変換
@@ -95,6 +97,7 @@ class _ShareScreenState extends State<ShareScreen> {
           receivedImagesNow = 0;
           await _dataChannel
               ?.send(RTCDataChannelMessage('ok')); //全部の画像を受け取ったらokを送る
+          print("send: ok");
           bool answer = await showDialog(
               context: context,
               builder: (_) {
@@ -108,10 +111,12 @@ class _ShareScreenState extends State<ShareScreen> {
           receivedImageFiles.clear();
         } else {
           await _dataChannel?.send(RTCDataChannelMessage('next'));
+          print("send: next");
         }
         receivedList.clear();
         // receivedList8.removeRange(0, receivedList8.length);
       } else if (data.text == 'next') {
+        print("next from aite");
         if (sendListNow == 0) {
           currentSendByteData = await imageFiles[sendImagesNow].readAsBytes();
           sendListLength = currentSendByteData.length;
@@ -119,17 +124,26 @@ class _ShareScreenState extends State<ShareScreen> {
         if (sendListNow + 250000 < sendListLength) {
           await _dataChannel?.send(RTCDataChannelMessage.fromBinary(
               currentSendByteData.sublist(sendListNow, sendListNow + 250000)));
+          print(currentSendByteData.sublist(sendListNow, sendListNow + 10));
           sendListNow += 250000;
         } else if (sendListNow > sendListLength) {
           await _dataChannel?.send(RTCDataChannelMessage('finish'));
+          print("finish");
           sendListNow = 0;
-          sendImagesNow++;
+          if(sendImagesCount > sendImagesNow+1){
+            sendImagesNow++;
+          } else {
+            sendImagesNow = 0;
+          }
+
         } else {
           await _dataChannel?.send(RTCDataChannelMessage.fromBinary(
               currentSendByteData.sublist(sendListNow, sendListLength)));
+          print(currentSendByteData.sublist(sendListNow, sendListNow + 10));
           sendListNow += 250000;
         }
       } else if (data.text == 'ok') {
+        print("ok");
         sendImagesNow = 0;
         await showDialog(
             context: context,
@@ -155,27 +169,8 @@ class _ShareScreenState extends State<ShareScreen> {
   void _sendImageCount() async {
     await _dataChannel?.send(RTCDataChannelMessage.fromBinary(
         Uint8List.fromList([sendImagesCount])));
-    print(Uint8List.fromList([sendImagesCount]));
   }
 
-  // Future<void> _sendBinary() async {
-  //   Uint8List byte = await imageFiles[0].readAsBytes();
-  //   int length = byte.length;
-  //   int listnow = 0;
-  //   for (int i = 250000;
-  //   i < length;
-  //   listnow = listnow + 250000, i = i + 250000) {
-  //     print("send: ${byte.sublist(listnow,listnow+10)}");
-  //     await _dataChannel
-  //         ?.send(RTCDataChannelMessage.fromBinary(byte.sublist(listnow, i)));
-  //     await Future.delayed(Duration(milliseconds: 100)); //相手が受け取って処理する時間を与える
-  //   }
-  //   await _dataChannel
-  //       ?.send(RTCDataChannelMessage.fromBinary(byte.sublist(listnow, length)));
-  //   await Future.delayed(Duration(milliseconds: 100));
-  //   await _dataChannel?.send(RTCDataChannelMessage('finish'));
-  //   print("send: finish!");
-  // }
 
   @override
   Widget build(BuildContext context) {

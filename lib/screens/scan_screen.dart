@@ -71,9 +71,9 @@ class _ScanScreenState extends State<ScanScreen> {
       }
       signaling = Signaling();
       await signaling.init(); //peripheral.init()が行われる
-      signaling.onDataChannel = (_, channel) {
-        _dataChannel = channel;
-      };
+      // signaling.onDataChannel = (_, channel) {
+      //   _dataChannel = channel;
+      // };
 
       signaling.onSignalingStateChange = (SignalingState state) {
         switch (state) {
