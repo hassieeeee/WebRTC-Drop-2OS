@@ -52,44 +52,54 @@ class Device {
   String address;
 }
 
-// class IntervalSender {
-//   IntervalSender(this.platform);
-//
-//   final MethodChannel platform;
-//   List<String> sendContents = [];
-//   int nowIndex = -1;
-//   int preIndex = -1;
-//   bool stopSend = false;
-//
-//   //一回呼び出せば送信し続ける
-//   Future<void> intervalSend() async{
-//     //await Future.delayed(Duration(milliseconds: 4000));
-//     while(true){
-//       await Future.delayed(Duration(milliseconds: 150));
-//       if(preIndex < nowIndex){
-//         preIndex += 1;
-//         platform.invokeMethod('WriteMessage', sendContents[preIndex]);
-//       }
-//       if(stopSend) break;
-//     }
-//   }
-//
-//   void addContent(String content){
-//     sendContents.add(content + 'fin');
-//     nowIndex += 1;
-//   }
-//
-//   void stop(){
-//     stopSend = true;
-//   }
-//
-// }
+class IntervalSender {
+  IntervalSender( this.writeMessage);
+
+  List<String> sendContents = [];
+  int nowIndex = -1;
+  int preIndex = -1;
+  bool stopSend = false;
+  bool isSending = false;
+  Function(String content) writeMessage;
+
+  //一回呼び出せば送信し続ける
+  Future<void> intervalSend() async{
+    isSending = true;
+    while(true){
+      await Future.delayed(Duration(milliseconds: 150));
+      if(preIndex < nowIndex){
+        preIndex += 1;
+        writeMessage(sendContents[preIndex]);
+      }
+      if(stopSend) break;
+    }
+  }
+
+  void addContent(String content){
+    sendContents.add(content);
+    nowIndex += 1;
+  }
+
+  // void addContent(String content){
+  //   int length = content.length;
+  //   int stringNow = 0;
+  //   while(length > stringNow + mtu){
+  //     sendContents.add(content.substring(stringNow,stringNow + mtu));
+  //     stringNow += mtu;
+  //     nowIndex += 1;
+  //   }
+  //   sendContents.add(content + '*');
+  //   nowIndex += 1;
+  // }
+
+  void stop(){
+    stopSend = true;
+  }
+
+}
 
 class Signaling {
   Signaling();
-
-  // final MethodChannel platform;
-  // IntervalSender? _intervalsender;
 
   JsonEncoder _encoder = JsonEncoder();
   JsonDecoder _decoder = JsonDecoder();
@@ -109,6 +119,7 @@ class Signaling {
   late Peripheral peripheral;
   late Central central;
   late int bleMtuSize;
+  late IntervalSender intervalSender;
 
 
 
@@ -190,6 +201,7 @@ class Signaling {
   void getMtu(int mtu){
     bleMtuSize = mtu-17;
     print("mtuSize:{$bleMtuSize}");
+    intervalSender = IntervalSender(writeMessage);
   }
 
   Future<void> writeMessage(String content) async {
@@ -329,7 +341,9 @@ class Signaling {
           onCallStateChange?.call(newSession, CallState.CallStateNew);
           log('newwwwwwwwwwwwwwwwww');
           onCallStateChange?.call(newSession, CallState.CallStateRinging);
+
         }
+        intervalSender.intervalSend();
         break;
       case 'answer':
         {
@@ -340,6 +354,7 @@ class Signaling {
               RTCSessionDescription(description['sdp'], description['type']));
           onCallStateChange?.call(session!, CallState.CallStateConnected);
         }
+        intervalSender.intervalSend();
         break;
       case 'candidate':
         {
@@ -522,7 +537,7 @@ class Signaling {
       // and should be thoroughly tested in your own environment.
       await Future.delayed(
           const Duration(milliseconds: 1000),
-          () => _send('candidate', {
+          () => _sendToInterval('candidate', {
                 'to': peerId,
                 'from': _selfId,
                 'candidate': {
@@ -632,14 +647,14 @@ class Signaling {
     await writeMessage(_encoder.convert(request));
   }
 
-  // void _sendToInterval(event, data) {
-  //   var request = Map();
-  //   request["type"] = event;
-  //   request["data"] = data;
-  //   print('request = '+ request.toString());
-  //   _intervalsender?.addContent(_encoder.convert(request));
-  //
-  // }
+  void _sendToInterval(event, data) {
+    var request = Map();
+    request["type"] = event;
+    request["data"] = data;
+    print('request = '+ request.toString());
+    intervalSender.addContent(_encoder.convert(request));
+
+  }
 
   Future<void> _cleanSessions() async {
     if (_localStream != null) {

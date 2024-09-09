@@ -109,6 +109,7 @@ class _ScanScreenState extends State<ScanScreen> {
           case CallState.CallStateInvite:
           case CallState.CallStateConnected:
             print('bbbbb');
+            signaling.intervalSender.stop();
           case CallState.CallStateRinging:
         }
       };
