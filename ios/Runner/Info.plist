@@ -6,6 +6,8 @@
 	<string>For advertise as ble peripheral</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
 	<string>For advertise as ble peripheral</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>For pick images from photo library</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
@@ -49,5 +51,7 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key></key>
+	<string></string>
 </dict>
 </plist>
