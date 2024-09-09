@@ -66,7 +66,7 @@ class IntervalSender {
   Future<void> intervalSend() async{
     isSending = true;
     while(true){
-      await Future.delayed(Duration(milliseconds: 150));
+      await Future.delayed(Duration(milliseconds: 300));
       if(preIndex < nowIndex){
         preIndex += 1;
         writeMessage(sendContents[preIndex]);
