@@ -8,6 +8,7 @@ import 'package:image_picker_android/image_picker_android.dart';
 import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:image_gallery_saver/image_gallery_saver.dart';
 
 import '../utils/signaling.dart';
 
@@ -40,6 +41,7 @@ class _ShareScreenState extends State<ShareScreen> {
 
   List<int> receivedList = [];
   late Uint8List receivedList8;
+  List<Uint8List> receivedList8List = [];
   List<XFile> receivedImageFiles = [];
   List<Image> receivedViewImages = [];
   int receivedImagesCount = 0;
@@ -87,7 +89,8 @@ class _ShareScreenState extends State<ShareScreen> {
         receivedList8 =
             Uint8List.fromList(receivedList); //受け取った画像1枚分のリストをUint8listに変換
         XFile tempXFile = XFile.fromData(receivedList8); //そのUint8listをXFileに変換
-        receivedImageFiles.add(tempXFile); //保存する時用にXFileのリストに追加
+        receivedImageFiles.add(tempXFile); //保存する時用にXFileのリストに追加?
+        receivedList8List.add(receivedList8);//保存する時用にUint8listのリストに追加
         // receivedViewImages.add(Image.file(File(tempXFile.path))); //受信した画像のプレビュー用にImageのリストに追加
         receivedViewImages.add(Image.memory(receivedList8));
         receivedImagesNow++; //今何枚目の画像かをカウント
@@ -105,8 +108,10 @@ class _ShareScreenState extends State<ShareScreen> {
                     receivedViewImages); //受け取った画像をダイアログで表示して保存するか聞く
               });
           if (answer) {
-            // await _saveImage2(list8);
+            await _saveImageList();
+
           }
+          receivedList8List.clear();
           receivedViewImages.clear();
           receivedImageFiles.clear();
         } else {
@@ -171,6 +176,11 @@ class _ShareScreenState extends State<ShareScreen> {
         Uint8List.fromList([sendImagesCount])));
   }
 
+  Future _saveImageList() async{
+    receivedList8List.forEach((buffer) async {
+      await ImageGallerySaver.saveImage(buffer);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
