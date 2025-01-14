@@ -69,7 +69,7 @@ class Peripheral{
     });
 
     BlePeripheral.setCharacteristicSubscriptionChangeCallback(
-            (String deviceId, String characteristicId, bool isSubscribed) {
+            (String deviceId, String characteristicId, bool isSubscribed, String? name) {
           print(
             "onCharacteristicSubscriptionChange: $deviceId : $characteristicId $isSubscribed",
           );
