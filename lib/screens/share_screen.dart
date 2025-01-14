@@ -8,7 +8,7 @@ import 'package:image_picker_android/image_picker_android.dart';
 import 'package:image_picker_platform_interface/image_picker_platform_interface.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
-import 'package:image_gallery_saver/image_gallery_saver.dart';
+import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 
 import '../utils/signaling.dart';
 
@@ -178,7 +178,7 @@ class _ShareScreenState extends State<ShareScreen> {
 
   Future _saveImageList() async{
     receivedList8List.forEach((buffer) async {
-      await ImageGallerySaver.saveImage(buffer);
+      await ImageGallerySaverPlus.saveImage(buffer);
     });
   }
 
